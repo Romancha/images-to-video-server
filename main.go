@@ -212,7 +212,7 @@ func generateVideo(captureImage CaptureImage) {
 
 		errWrite := video.Write(img)
 		if errWrite != nil {
-			log.Fatalf("[ERROR] failed to write image: %v", err)
+			log.Fatalf("[ERROR] failed to write image: %v", errWrite)
 		}
 	}
 
