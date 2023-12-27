@@ -144,6 +144,8 @@ func main() {
 		c.Header("Content-Range", contentRange)
 		c.Header("Content-Length", contentLength)
 
+		c.Status(http.StatusPartialContent)
+
 		file.Seek(startByte, 0)
 		buffer := make([]byte, endByte-startByte+1)
 		file.Read(buffer)
