@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Videos</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+</head>
+<nav>
+    <div class="nav-wrapper">
+        <a href="#" class="brand-logo center">Webcam Timelapse</a>
+        <ul id="nav-mobile" class="right hide-on-med-and-down">
+            <li><a href="https://github.com/Romancha/images-to-video-server" target="_blank">GitHub</a></li>
+        </ul>
+    </div>
+</nav>
+<body>
+<div class="container">
+    {{range .captureImages}}
+    <div class="card">
+        <div class="card-content">
+            <span class="card-title">{{.Name}}</span>
+        </div>
+        <div class="card-image center">
+            <video controls>
+                <source src="/stream/{{.Name}}.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
+    </div>
+    {{end}}
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+</body>
+</html>
