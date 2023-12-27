@@ -19,7 +19,7 @@ import (
 
 var opts struct {
 	ConfigPath string `long:"config-path" env:"CONFIG_PATH" description:"Config path" default:"./data/config.json"`
-	CronSpec   string `long:"cron-spec" env:"CRON_SPEC" description:"Cron spec" default:"0 */30 * * * *"`
+	CronSpec   string `long:"cron-spec" env:"CRON_SPEC" description:"Cron spec" default:"0 */01 * * * *"`
 
 	TemplatesPath string `long:"templates-path" env:"TEMPLATES_PATH" description:"Templates path" default:"./templates"`
 	Port          int    `long:"port" env:"PORT" description:"Port" default:"8080"`
@@ -187,12 +187,14 @@ func generateVideo(captureImage CaptureImage) {
 
 	w, h, _, err := vidio.Read(matches[0])
 	if err != nil {
-		log.Printf("[ERROR] failed to read image: %v", err)
+		log.Fatalf("[ERROR] failed to read image: %v", err)
 	}
 
 	options := vidio.Options{FPS: float64(captureImage.Fps)}
 
 	tempFileName := captureImage.SavePath + "/" + captureImage.Name + "_temp_.mp4"
+	log.Printf("[DEBUG] tempFileName: %s", tempFileName)
+
 	video, err := vidio.NewVideoWriter(tempFileName, w, h, &options)
 	if err != nil {
 		log.Fatalf("[ERROR] failed to create video writer: %v", err)
@@ -207,15 +209,23 @@ func generateVideo(captureImage CaptureImage) {
 
 		_, _, img, _ := vidio.Read(name)
 		if err != nil {
-			log.Fatalf("[ERROR] failed to read image: %v", err)
+			log.Printf("[ERROR] failed to read image: %v", err)
+			continue
+
 		}
 
 		errWrite := video.Write(img)
 		if errWrite != nil {
-			log.Fatalf("[ERROR] failed to write image: %v", errWrite)
+			log.Printf("[ERROR] failed to write image: %v", errWrite)
+			continue
 		}
 	}
 
 	originalName := strings.Replace(tempFileName, "_temp_", "", 1)
+	log.Printf("[DEBUG] originalName: %s", originalName)
+
 	err = os.Rename(tempFileName, originalName)
+	if err != nil {
+		log.Printf("[ERROR] failed to rename file: %v", err)
+	}
 }
