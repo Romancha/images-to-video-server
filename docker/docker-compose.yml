@@ -1,0 +1,13 @@
+services:
+  image-to-video:
+    image: ghcr.io/romancha/image-to-video:latest
+    hostname: image-to-video
+    container_name: image-to-video
+    restart: always
+    volumes:
+      - ./../data/:/data/:rw
+    environment:
+      - CONFIG_PATH=/data/config.json
+      - TEMPLATES_PATH=/templates/
+    ports:
+      - 8080:8080

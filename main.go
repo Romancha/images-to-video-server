@@ -19,8 +19,10 @@ import (
 
 var opts struct {
 	ConfigPath string `long:"config-path" env:"CONFIG_PATH" description:"Config path" default:"./data/config.json"`
-	CronSpec   string `long:"cron-spec" env:"CRON_SPEC" description:"Cron spec" default:"0 */01 * * * *"`
-	Port       int    `long:"port" env:"PORT" description:"Port" default:"8080"`
+	CronSpec   string `long:"cron-spec" env:"CRON_SPEC" description:"Cron spec" default:"0 */30 * * * *"`
+
+	TemplatesPath string `long:"templates-path" env:"TEMPLATES_PATH" description:"Templates path" default:"./templates"`
+	Port          int    `long:"port" env:"PORT" description:"Port" default:"8080"`
 
 	Debug bool `long:"debug" env:"DEBUG" description:"debug mode"`
 }
@@ -71,8 +73,10 @@ func main() {
 	videoCron.Start()
 
 	router := gin.Default()
-	// trusted local behind proxy
-	router.SetTrustedProxies([]string{"127.0.0.1", "10.0.0.0/8"})
+	errSetTrusted := router.SetTrustedProxies([]string{"127.0.0.1", "10.0.0.0/8"})
+	if errSetTrusted != nil {
+		log.Fatalf("[ERROR] failed to set trusted proxy")
+	}
 
 	router.LoadHTMLGlob("./templates/*")
 
@@ -176,6 +180,10 @@ func generateVideo(captureImage CaptureImage) {
 	if err != nil {
 		log.Printf("[ERROR] failed to find files: %v from pattern: %s", err, captureImage.Pattern)
 	}
+	if len(matches) == 0 {
+		log.Printf("[INFO] no files found for pattern: %s", captureImage.Pattern)
+		return
+	}
 
 	w, h, _, err := vidio.Read(matches[0])
 	if err != nil {
@@ -184,18 +192,30 @@ func generateVideo(captureImage CaptureImage) {
 
 	options := vidio.Options{FPS: float64(captureImage.Fps)}
 
-	fileName := captureImage.SavePath + "/" + captureImage.Name + "_temp_.mp4"
-	video, _ := vidio.NewVideoWriter(fileName, w, h, &options)
+	tempFileName := captureImage.SavePath + "/" + captureImage.Name + "_temp_.mp4"
+	video, err := vidio.NewVideoWriter(tempFileName, w, h, &options)
+	if err != nil {
+		log.Fatalf("[ERROR] failed to create video writer: %v", err)
+	}
+
 	defer video.Close()
 
+	log.Printf("[DEBUG] matches: %+v", matches)
+
 	for _, name := range matches {
+		log.Printf("[DEBUG] Read image: %s", name)
+
 		_, _, img, _ := vidio.Read(name)
-		err := video.Write(img)
 		if err != nil {
-			log.Printf("[ERROR] failed to write image: %v", err)
+			log.Fatalf("[ERROR] failed to read image: %v", err)
+		}
+
+		errWrite := video.Write(img)
+		if errWrite != nil {
+			log.Fatalf("[ERROR] failed to write image: %v", err)
 		}
 	}
 
-	originalName := strings.Replace(fileName, "_temp_", "", 1)
-	err = os.Rename(fileName, originalName)
+	originalName := strings.Replace(tempFileName, "_temp_", "", 1)
+	err = os.Rename(tempFileName, originalName)
 }
