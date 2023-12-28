@@ -42,6 +42,10 @@ COPY --from=builder /lib/* /lib/
 COPY --from=builder /go/bin/app /go/bin/app
 COPY --from=builder /app/templates /templates
 
+# Create /data/video/ directory and give permissions to appuser
+RUN mkdir -p /data/video/
+RUN chown -R appuser:appuser /data/video/
+
 USER appuser:appuser
 
 ENTRYPOINT ["/go/bin/app"]
