@@ -3,11 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	vidio "github.com/AlexEidt/Vidio"
 	"github.com/gin-gonic/gin"
 	"github.com/go-pkgz/lgr"
 	"github.com/jessevdk/go-flags"
 	"github.com/robfig/cron/v3"
+	ffmpeg "github.com/u2takey/ffmpeg-go"
 	"log"
 	"net/http"
 	"os"
@@ -20,6 +20,7 @@ import (
 var opts struct {
 	ConfigPath string `long:"config-path" env:"CONFIG_PATH" description:"Config path" default:"./data/config.json"`
 	CronSpec   string `long:"cron-spec" env:"CRON_SPEC" description:"Cron spec" default:"0 */01 * * * *"`
+	Framerate  int    `long:"framerate" env:"FRAMERATE" description:"Framerate" default:"10"`
 
 	TemplatesPath string `long:"templates-path" env:"TEMPLATES_PATH" description:"Templates path" default:"./templates"`
 	Port          int    `long:"port" env:"PORT" description:"Port" default:"8080"`
@@ -174,7 +175,7 @@ func setupLog(dbg bool) {
 }
 
 func generateVideo(captureImage CaptureImage) {
-	log.Printf("[INFO] Generate video for: %+v", captureImage)
+	log.Printf("[INFO] Generate videoWriter for: %+v", captureImage)
 
 	matches, err := filepath.Glob(captureImage.Pattern)
 	if err != nil {
@@ -185,40 +186,13 @@ func generateVideo(captureImage CaptureImage) {
 		return
 	}
 
-	w, h, _, err := vidio.Read(matches[0])
-	if err != nil {
-		log.Fatalf("[ERROR] failed to read image: %v", err)
-	}
-
-	options := vidio.Options{FPS: float64(captureImage.Fps)}
-
 	tempFileName := captureImage.SavePath + "/" + captureImage.Name + "_temp_.mp4"
-	log.Printf("[DEBUG] tempFileName: %s", tempFileName)
 
-	video, err := vidio.NewVideoWriter(tempFileName, w, h, &options)
+	err = ffmpeg.Input(captureImage.Pattern, ffmpeg.KwArgs{"pattern_type": "glob", "framerate": opts.Framerate}).
+		Output(tempFileName, ffmpeg.KwArgs{"c:v": "libx264"}).
+		OverWriteOutput().ErrorToStdOut().Run()
 	if err != nil {
-		log.Fatalf("[ERROR] failed to create video writer: %v", err)
-	}
-
-	defer video.Close()
-
-	log.Printf("[DEBUG] matches: %+v", matches)
-
-	for _, name := range matches {
-		log.Printf("[DEBUG] Read image: %s", name)
-
-		_, _, img, _ := vidio.Read(name)
-		if err != nil {
-			log.Printf("[ERROR] failed to read image: %v", err)
-			continue
-
-		}
-
-		errWrite := video.Write(img)
-		if errWrite != nil {
-			log.Printf("[ERROR] failed to write image: %v", errWrite)
-			continue
-		}
+		log.Fatalf("[ERROR] failed to create video: %v", err)
 	}
 
 	originalName := strings.Replace(tempFileName, "_temp_", "", 1)
