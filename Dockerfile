@@ -44,6 +44,7 @@ COPY --from=builder /lib/* /lib/
 
 COPY --from=builder /go/bin/app /go/bin/app
 COPY --from=builder /app/templates /templates
+COPY --from=builder /data/video/ /data/video/
 
 USER appuser:appuser
 
