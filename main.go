@@ -89,6 +89,11 @@ func main() {
 
 	router.GET("/stream/:filename", func(c *gin.Context) {
 		filename := c.Param("filename")
+		if !isValidFilename(filename) {
+			c.String(http.StatusBadRequest, "Invalid filename.")
+			return
+		}
+
 		var captureImage CaptureImage
 		for _, ci := range captureImages {
 			nameWithoutExtension := filename[:len(filename)-len(filepath.Ext(filename))]
@@ -202,4 +207,9 @@ func generateVideo(captureImage CaptureImage) {
 	if err != nil {
 		log.Printf("[ERROR] failed to rename file: %v", err)
 	}
+}
+
+func isValidFilename(filename string) bool {
+	re := regexp.MustCompile(`^[a-zA-Z0-9_\-.]+$`)
+	return re.MatchString(filename)
 }
