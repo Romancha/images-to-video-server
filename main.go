@@ -61,18 +61,20 @@ func main() {
 
 	log.Printf("[INFO] Capture Images config: %+v", captureImages)
 
+	// Generate video on startup
+	generateVideos(captureImages)
+
+	// Start cron job to generate videos
 	videoCron := cron.New(cron.WithSeconds())
 	_, err = videoCron.AddFunc(opts.CronSpec, func() {
-		for _, captureImage := range captureImages {
-			log.Printf("[INFO] Capture image: %+v", captureImage)
-			generateVideo(captureImage)
-		}
+		generateVideos(captureImages)
 	})
 	if err != nil {
 		log.Fatalf("[ERROR] failed to add cron: %v", err)
 	}
 	videoCron.Start()
 
+	// Start web server
 	router := gin.Default()
 	errSetTrusted := router.SetTrustedProxies([]string{"127.0.0.1", "10.0.0.0/8"})
 	if errSetTrusted != nil {
@@ -171,6 +173,13 @@ func main() {
 		log.Fatalf("[ERROR] failed to run router: %v", err)
 	}
 
+}
+
+func generateVideos(captureImages CaptureImageList) {
+	for _, captureImage := range captureImages {
+		log.Printf("[INFO] Capture image: %+v", captureImage)
+		generateVideo(captureImage)
+	}
 }
 
 func setupLog(dbg bool) {
