@@ -1,14 +1,16 @@
 [
   {
     "name": "dm_1",
+    "title": "dm_1",
     "pattern": "/data/images/dm_1*.jpg",
-    "fps": 5,
+    "fps": [5, 15],
     "savePath": "/data/video"
   },
   {
     "name": "dm_2",
+    "title": "dm_2",
     "pattern": "/data/images/dm_2*.jpg",
-    "fps": 5,
+    "fps": [5, 15],
     "savePath": "/data/video"
   }
 ]

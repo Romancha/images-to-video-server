@@ -20,7 +20,6 @@ import (
 var opts struct {
 	ConfigPath string `long:"config-path" env:"CONFIG_PATH" description:"Config path" default:"./data/config.json"`
 	CronSpec   string `long:"cron-spec" env:"CRON_SPEC" description:"Cron spec" default:"0 */01 * * * *"`
-	Framerate  int    `long:"framerate" env:"FRAMERATE" description:"Framerate" default:"10"`
 
 	TemplatesPath string `long:"templates-path" env:"TEMPLATES_PATH" description:"Templates path" default:"./templates"`
 	Port          int    `long:"port" env:"PORT" description:"Port" default:"8080"`
@@ -30,8 +29,9 @@ var opts struct {
 
 type CaptureImage struct {
 	Name     string `json:"name"`
+	Title    string `json:"title"`
 	Pattern  string `json:"pattern"`
-	Fps      int    `json:"fps"`
+	Fps      []int  `json:"fps"`
 	SavePath string `json:"savePath"`
 }
 
@@ -87,6 +87,15 @@ func main() {
 		})
 	})
 
+	var videoNames map[string]CaptureImage
+	videoNames = make(map[string]CaptureImage)
+	for _, captureImage := range captureImages {
+		for _, fps := range captureImage.Fps {
+			videoName := captureImage.Name + "_" + strconv.Itoa(fps) + "_fps.mp4"
+			videoNames[videoName] = captureImage
+		}
+	}
+
 	router.GET("/stream/:filename", func(c *gin.Context) {
 		filename := c.Param("filename")
 		if !isValidFilename(filename) {
@@ -94,15 +103,8 @@ func main() {
 			return
 		}
 
-		var captureImage CaptureImage
-		for _, ci := range captureImages {
-			nameWithoutExtension := filename[:len(filename)-len(filepath.Ext(filename))]
-			if ci.Name == nameWithoutExtension {
-				captureImage = ci
-				break
-			}
-		}
-		if captureImage.Name == "" {
+		captureImage, found := videoNames[filename]
+		if !found {
 			c.String(http.StatusNotFound, "Video not found.")
 			return
 		}
@@ -191,21 +193,23 @@ func generateVideo(captureImage CaptureImage) {
 		return
 	}
 
-	tempFileName := captureImage.SavePath + "/" + captureImage.Name + "_temp_.mp4"
+	for _, fps := range captureImage.Fps {
+		tempFileName := captureImage.SavePath + "/" + captureImage.Name + "_temp_" + strconv.Itoa(fps) + "_fps.mp4"
 
-	err = ffmpeg.Input(captureImage.Pattern, ffmpeg.KwArgs{"pattern_type": "glob", "framerate": opts.Framerate}).
-		Output(tempFileName, ffmpeg.KwArgs{"c:v": "libx264"}).
-		OverWriteOutput().ErrorToStdOut().Run()
-	if err != nil {
-		log.Fatalf("[ERROR] failed to create video: %v", err)
-	}
+		err = ffmpeg.Input(captureImage.Pattern, ffmpeg.KwArgs{"pattern_type": "glob", "framerate": fps}).
+			Output(tempFileName, ffmpeg.KwArgs{"c:v": "libx264"}).
+			OverWriteOutput().ErrorToStdOut().Run()
+		if err != nil {
+			log.Fatalf("[ERROR] failed to create video: %v", err)
+		}
 
-	originalName := strings.Replace(tempFileName, "_temp_", "", 1)
-	log.Printf("[DEBUG] originalName: %s", originalName)
+		originalName := strings.Replace(tempFileName, "_temp_", "_", 1)
+		log.Printf("[DEBUG] originalName: %s", originalName)
 
-	err = os.Rename(tempFileName, originalName)
-	if err != nil {
-		log.Printf("[ERROR] failed to rename file: %v", err)
+		err = os.Rename(tempFileName, originalName)
+		if err != nil {
+			log.Printf("[ERROR] failed to rename file: %v", err)
+		}
 	}
 }
 

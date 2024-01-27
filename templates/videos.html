@@ -235,18 +235,20 @@
 
 </div>
 <div class="container">
-    {{range .captureImages}}
+    {{range $index, $captureImage := .captureImages}}
+    {{range .Fps}}
     <div class="card">
         <div class="card-content">
-            <span class="card-title">{{.Name}}</span>
+            <span class="card-title">{{$captureImage.Title}}, {{.}} fps</span>
         </div>
         <div class="card-image center">
             <video controls>
-                <source src="/stream/{{.Name}}.mp4" type="video/mp4">
+                <source src="/stream/{{$captureImage.Name}}_{{.}}_fps.mp4" type="video/mp4">
                 Your browser does not support the video tag.
             </video>
         </div>
     </div>
+    {{end}}
     {{end}}
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
