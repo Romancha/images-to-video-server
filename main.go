@@ -15,7 +15,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 )
+
+var generateVideosMutex sync.Mutex
 
 var opts struct {
 	ConfigPath string `long:"config-path" env:"CONFIG_PATH" description:"Config path" default:"./data/config.json"`
@@ -62,12 +65,12 @@ func main() {
 	log.Printf("[INFO] Capture Images config: %+v", captureImages)
 
 	// Generate video on startup
-	generateVideos(captureImages)
+	go generateVideosWithLock(captureImages)
 
 	// Start cron job to generate videos
 	videoCron := cron.New(cron.WithSeconds())
 	_, err = videoCron.AddFunc(opts.CronSpec, func() {
-		generateVideos(captureImages)
+		generateVideosWithLock(captureImages)
 	})
 	if err != nil {
 		log.Fatalf("[ERROR] failed to add cron: %v", err)
@@ -173,6 +176,13 @@ func main() {
 		log.Fatalf("[ERROR] failed to run router: %v", err)
 	}
 
+}
+
+func generateVideosWithLock(captureImages CaptureImageList) {
+	generateVideosMutex.Lock()
+	defer generateVideosMutex.Unlock()
+
+	generateVideos(captureImages)
 }
 
 func generateVideos(captureImages CaptureImageList) {
