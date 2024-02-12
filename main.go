@@ -8,6 +8,7 @@ import (
 	"github.com/jessevdk/go-flags"
 	"github.com/robfig/cron/v3"
 	ffmpeg "github.com/u2takey/ffmpeg-go"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -164,9 +165,12 @@ func main() {
 		c.Status(http.StatusPartialContent)
 
 		file.Seek(startByte, 0)
-		buffer := make([]byte, endByte-startByte+1)
-		file.Read(buffer)
-		c.Writer.Write(buffer)
+		_, err = io.CopyN(c.Writer, file, endByte-startByte+1)
+		if err != nil {
+			log.Printf("[ERROR] failed to copy file content: %v", err)
+			c.String(http.StatusInternalServerError, "Failed to stream video.")
+			return
+		}
 
 		log.Printf("[DEBUG] response file: %s", filename)
 	})
