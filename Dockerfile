@@ -7,6 +7,7 @@ WORKDIR $GOPATH/src/mypackage/myapp/
 COPY . .
 
 COPY templates /app/templates
+COPY static /app/static
 
 RUN go get -d -v
 RUN go mod download
