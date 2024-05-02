@@ -25,7 +25,7 @@ COPY --from=builder /lib/* /lib/
 
 COPY --from=builder /go/bin/app /go/bin/app
 COPY --from=builder /app/templates /templates
-COPY --form=builder /app/static /static
+COPY --from=builder /app/static /static
 
 ENTRYPOINT ["/go/bin/app"]
 
