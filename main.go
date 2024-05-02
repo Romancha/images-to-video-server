@@ -25,8 +25,7 @@ var opts struct {
 	ConfigPath string `long:"config-path" env:"CONFIG_PATH" description:"Config path" default:"./data/config.json"`
 	CronSpec   string `long:"cron-spec" env:"CRON_SPEC" description:"Cron spec" default:"0 */01 * * * *"`
 
-	TemplatesPath string `long:"templates-path" env:"TEMPLATES_PATH" description:"Templates path" default:"./templates"`
-	Port          int    `long:"port" env:"PORT" description:"Port" default:"8080"`
+	Port int `long:"port" env:"PORT" description:"Port" default:"8080"`
 
 	Debug bool `long:"debug" env:"DEBUG" description:"debug mode"`
 }
@@ -86,6 +85,7 @@ func main() {
 	}
 
 	router.LoadHTMLGlob("./templates/*")
+	router.StaticFS("./static", http.Dir("./static"))
 
 	router.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "videos.html", gin.H{

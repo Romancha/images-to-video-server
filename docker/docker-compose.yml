@@ -8,6 +8,5 @@ services:
       - ./../data/:/data/:rw
     environment:
       - CONFIG_PATH=/data/config.json
-      - TEMPLATES_PATH=/templates/
     ports:
       - 8080:8080
