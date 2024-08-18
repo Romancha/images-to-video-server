@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
-	"strings"
 	"sync"
 )
 
@@ -39,6 +38,12 @@ type CaptureImage struct {
 }
 
 type CaptureImageList []CaptureImage
+
+type CaptureImageState struct {
+	LastProcessedImage string `json:"lastProcessedImage"`
+}
+
+type CaptureImageStateMap map[string]CaptureImageState
 
 func main() {
 	fmt.Println("Video server started")
@@ -182,6 +187,27 @@ func main() {
 
 }
 
+func loadState(filePath string) (CaptureImageStateMap, error) {
+	state := make(CaptureImageStateMap)
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return state, nil
+		}
+		return nil, err
+	}
+	err = json.Unmarshal(data, &state)
+	return state, err
+}
+
+func saveState(filePath string, state CaptureImageStateMap) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filePath, data, 0644)
+}
+
 func generateVideosWithLock(captureImages CaptureImageList) {
 	generateVideosMutex.Lock()
 	defer generateVideosMutex.Unlock()
@@ -190,9 +216,10 @@ func generateVideosWithLock(captureImages CaptureImageList) {
 }
 
 func generateVideos(captureImages CaptureImageList) {
+	stateFilePath := "./data/state.json"
 	for _, captureImage := range captureImages {
 		log.Printf("[INFO] Capture image: %+v", captureImage)
-		generateVideo(captureImage)
+		generateVideo(captureImage, stateFilePath)
 	}
 }
 
@@ -204,36 +231,166 @@ func setupLog(dbg bool) {
 	lgr.SetupStdLogger(logOpts...)
 }
 
-func generateVideo(captureImage CaptureImage) {
-	log.Printf("[INFO] Generate videoWriter for: %+v", captureImage)
+func generateVideo(captureImage CaptureImage, stateFilePath string) {
+	log.Printf("[INFO] Generate video for: %+v", captureImage)
+
+	state, err := loadState(stateFilePath)
+	if err != nil {
+		log.Printf("[ERROR] failed to load state: %v", err)
+		return
+	}
 
 	matches, err := filepath.Glob(captureImage.Pattern)
 	if err != nil {
 		log.Printf("[ERROR] failed to find files: %v from pattern: %s", err, captureImage.Pattern)
+		return
 	}
 	if len(matches) == 0 {
 		log.Printf("[INFO] no files found for pattern: %s", captureImage.Pattern)
 		return
 	}
 
-	for _, fps := range captureImage.Fps {
-		tempFileName := captureImage.SavePath + "/" + captureImage.Name + "_temp_" + strconv.Itoa(fps) + "_fps.mp4"
+	lastProcessedImage := state[captureImage.Name].LastProcessedImage
+	newImages := filterNewImages(matches, lastProcessedImage)
+	if len(newImages) == 0 {
+		log.Printf("[INFO] no new images found for pattern: %s", captureImage.Pattern)
+		return
+	}
 
-		err = ffmpeg.Input(captureImage.Pattern, ffmpeg.KwArgs{"pattern_type": "glob", "framerate": fps}).
-			Output(tempFileName, ffmpeg.KwArgs{"c:v": "libx264"}).
+	inputListFile, err := os.CreateTemp("", "input_list_*.txt")
+	if err != nil {
+		log.Fatalf("[ERROR] failed to create temporary file: %v", err)
+	}
+	defer os.Remove(inputListFile.Name())
+
+	for _, fps := range captureImage.Fps {
+		// clean inputListFile content
+		_ = inputListFile.Truncate(0)
+
+		currentFps := strconv.Itoa(fps)
+
+		finalFileName := captureImage.SavePath + "/" + captureImage.Name + "_" + currentFps + "_fps.mp4"
+		tempFileName := captureImage.SavePath + "/" + captureImage.Name + "_temp_" + currentFps + "_fps.mp4"
+		newSegmentFileName := captureImage.SavePath + "/" + captureImage.Name + "_new_" + currentFps + "_fps.mp4"
+
+		for _, img := range newImages {
+			absPath, err := filepath.Abs(img)
+			if err != nil {
+				log.Fatalf("[ERROR] failed to get absolute path: %v", err)
+			}
+			_, err = inputListFile.WriteString("file '" + absPath + "'\n")
+			if err != nil {
+				log.Fatalf("[ERROR] failed to write to temporary file: %v", err)
+			}
+		}
+
+		// Write new segment to file
+		log.Printf("[INFO] Creating new video segment: %s fron list: %s", newSegmentFileName,
+			inputListFile.Name())
+
+		err = ffmpeg.Input(inputListFile.Name(), ffmpeg.KwArgs{"f": "concat", "safe": "0", "r": fps}).
+			Output(newSegmentFileName, ffmpeg.KwArgs{"c:v": "libx264"}).
 			OverWriteOutput().ErrorToStdOut().Run()
 		if err != nil {
-			log.Fatalf("[ERROR] failed to create video: %v", err)
+			log.Fatalf("[ERROR] failed to create new video segment: %v", err)
 		}
 
-		originalName := strings.Replace(tempFileName, "_temp_", "_", 1)
-		log.Printf("[DEBUG] originalName: %s", originalName)
+		// Concatenate videos
+		err = concatenateVideos(finalFileName, newSegmentFileName, tempFileName, fps)
+		if err != nil {
+			log.Printf("[ERROR] failed to concatenate videos: %v", err)
+			return
+		}
 
-		err = os.Rename(tempFileName, originalName)
+		log.Printf("[INFO] Renaming file: %s to: %s", tempFileName, finalFileName)
+		err = os.Rename(tempFileName, finalFileName)
 		if err != nil {
 			log.Printf("[ERROR] failed to rename file: %v", err)
+			return
+		}
+
+		// Remove if new segment file exists
+		log.Printf("[INFO] Removing new segment file: %s", newSegmentFileName)
+		if _, err := os.Stat(newSegmentFileName); err == nil {
+			err = os.Remove(newSegmentFileName)
+			if err != nil {
+				log.Printf("[ERROR] failed to remove new segment file: %v", err)
+				return
+			}
+		}
+
+		state[captureImage.Name] = CaptureImageState{LastProcessedImage: newImages[len(newImages)-1]}
+		err = saveState(stateFilePath, state)
+		if err != nil {
+			log.Printf("[ERROR] failed to save state: %v", err)
+			return
 		}
 	}
+
+	inputListFile.Close()
+}
+
+func filterNewImages(images []string, lastProcessedImage string) []string {
+	if lastProcessedImage == "" {
+		return images
+	}
+	for i, img := range images {
+		if img == lastProcessedImage {
+			return images[i+1:]
+		}
+	}
+	return images
+}
+
+func concatenateVideos(existingVideo, newSegment, output string, fps int) error {
+	// Check if the existing video file exists
+	if _, err := os.Stat(existingVideo); os.IsNotExist(err) {
+		// If the existing video does not exist, treat the new segment as the first segment
+		err := os.Rename(newSegment, output)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("failed to stat existing video: %w", err)
+	}
+
+	// Create a temporary file to store the list of input files
+	inputListFile, err := os.CreateTemp("", "concat_list_*.txt")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	defer os.Remove(inputListFile.Name())
+
+	// Write the absolute paths of the videos to the temporary file
+	existingVideoAbs, err := filepath.Abs(existingVideo)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for existing video: %w", err)
+	}
+	newSegmentAbs, err := filepath.Abs(newSegment)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for new segment: %w", err)
+	}
+
+	_, err = inputListFile.WriteString("file '" + existingVideoAbs + "'\n")
+	if err != nil {
+		return fmt.Errorf("failed to write to temporary file: %w", err)
+	}
+	if existingVideo != newSegment {
+		_, err = inputListFile.WriteString("file '" + newSegmentAbs + "'\n")
+		if err != nil {
+			return fmt.Errorf("failed to write to temporary file: %w", err)
+		}
+	}
+	inputListFile.Close()
+
+	log.Printf("[INFO] Concatenating videos: %s, %s", existingVideo, newSegment)
+
+	// Use ffmpeg to concatenate the videos listed in the temporary file
+	return ffmpeg.Input(inputListFile.Name(), ffmpeg.KwArgs{"f": "concat", "safe": "0"}).
+		Output(output, ffmpeg.KwArgs{"c:v": "libx264"}).
+		OverWriteOutput().ErrorToStdOut().Run()
 }
 
 func isValidFilename(filename string) bool {
