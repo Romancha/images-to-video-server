@@ -12,6 +12,7 @@
     "title": "dm_2",
     "pattern": "/data/images/dm_2*.jpg",
     "fps": [5, 15],
+    "savePath": "/data/video",
     "resolution": "1600:1200"
   }
 ]
