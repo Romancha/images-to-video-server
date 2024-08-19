@@ -30,11 +30,12 @@ var opts struct {
 }
 
 type CaptureImage struct {
-	Name     string `json:"name"`
-	Title    string `json:"title"`
-	Pattern  string `json:"pattern"`
-	Fps      []int  `json:"fps"`
-	SavePath string `json:"savePath"`
+	Name       string `json:"name"`
+	Title      string `json:"title"`
+	Pattern    string `json:"pattern"`
+	Fps        []int  `json:"fps"`
+	SavePath   string `json:"savePath"`
+	Resolution string `json:"resolution"`
 }
 
 type CaptureImageList []CaptureImage
@@ -288,8 +289,20 @@ func generateVideo(captureImage CaptureImage, stateFilePath string) {
 		log.Printf("[INFO] Creating new video segment: %s fron list: %s", newSegmentFileName,
 			inputListFile.Name())
 
-		err = ffmpeg.Input(inputListFile.Name(), ffmpeg.KwArgs{"f": "concat", "safe": "0", "r": fps}).
-			Output(newSegmentFileName, ffmpeg.KwArgs{"c:v": "libx264"}).
+		err = ffmpeg.Input(
+			inputListFile.Name(),
+			ffmpeg.KwArgs{
+				"f":             "concat",
+				"safe":          "0",
+				"r":             fps,
+				"reinit_filter": "0",
+			}).
+			Output(newSegmentFileName, ffmpeg.KwArgs{
+				"vf": fmt.Sprintf(
+					"scale=%v:force_original_aspect_ratio=decrease:eval=frame,pad=%v:-1:-1:eval=frame",
+					captureImage.Resolution, captureImage.Resolution),
+				"c:v": "libx264",
+			}).
 			OverWriteOutput().ErrorToStdOut().Run()
 		if err != nil {
 			log.Fatalf("[ERROR] failed to create new video segment: %v", err)
