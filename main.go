@@ -217,7 +217,7 @@ func generateVideosWithLock(captureImages CaptureImageList) {
 }
 
 func generateVideos(captureImages CaptureImageList) {
-	stateFilePath := "./data/state.json"
+	stateFilePath := "/data/state.json"
 	for _, captureImage := range captureImages {
 		log.Printf("[INFO] Capture image: %+v", captureImage)
 		generateVideo(captureImage, stateFilePath)
