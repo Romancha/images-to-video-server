@@ -22,6 +22,7 @@ var generateVideosMutex sync.Mutex
 
 var opts struct {
 	ConfigPath string `long:"config-path" env:"CONFIG_PATH" description:"Config path" default:"./data/config.json"`
+	StatePath  string `long:"state-path" env:"STATE_PATH" description:"State path" default:"./data/state.json"`
 	CronSpec   string `long:"cron-spec" env:"CRON_SPEC" description:"Cron spec" default:"0 */01 * * * *"`
 
 	Port int `long:"port" env:"PORT" description:"Port" default:"8080"`
@@ -188,9 +189,9 @@ func main() {
 
 }
 
-func loadState(filePath string) (CaptureImageStateMap, error) {
+func loadState() (CaptureImageStateMap, error) {
 	state := make(CaptureImageStateMap)
-	data, err := os.ReadFile(filePath)
+	data, err := os.ReadFile(opts.StatePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return state, nil
@@ -201,12 +202,12 @@ func loadState(filePath string) (CaptureImageStateMap, error) {
 	return state, err
 }
 
-func saveState(filePath string, state CaptureImageStateMap) error {
+func saveState(state CaptureImageStateMap) error {
 	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filePath, data, 0644)
+	return os.WriteFile(opts.StatePath, data, 0644)
 }
 
 func generateVideosWithLock(captureImages CaptureImageList) {
@@ -217,10 +218,9 @@ func generateVideosWithLock(captureImages CaptureImageList) {
 }
 
 func generateVideos(captureImages CaptureImageList) {
-	stateFilePath := "/data/state.json"
 	for _, captureImage := range captureImages {
 		log.Printf("[INFO] Capture image: %+v", captureImage)
-		generateVideo(captureImage, stateFilePath)
+		generateVideo(captureImage)
 	}
 }
 
@@ -232,10 +232,10 @@ func setupLog(dbg bool) {
 	lgr.SetupStdLogger(logOpts...)
 }
 
-func generateVideo(captureImage CaptureImage, stateFilePath string) {
+func generateVideo(captureImage CaptureImage) {
 	log.Printf("[INFO] Generate video for: %+v", captureImage)
 
-	state, err := loadState(stateFilePath)
+	state, err := loadState()
 	if err != nil {
 		log.Printf("[ERROR] failed to load state: %v", err)
 		return
@@ -333,7 +333,7 @@ func generateVideo(captureImage CaptureImage, stateFilePath string) {
 		}
 
 		state[captureImage.Name] = CaptureImageState{LastProcessedImage: newImages[len(newImages)-1]}
-		err = saveState(stateFilePath, state)
+		err = saveState(state)
 		if err != nil {
 			log.Printf("[ERROR] failed to save state: %v", err)
 			return
@@ -402,7 +402,7 @@ func concatenateVideos(existingVideo, newSegment, output string, fps int) error 
 
 	// Use ffmpeg to concatenate the videos listed in the temporary file
 	return ffmpeg.Input(inputListFile.Name(), ffmpeg.KwArgs{"f": "concat", "safe": "0"}).
-		Output(output, ffmpeg.KwArgs{"c:v": "libx264"}).
+		Output(output, ffmpeg.KwArgs{"c": "copy"}).
 		OverWriteOutput().ErrorToStdOut().Run()
 }
 
