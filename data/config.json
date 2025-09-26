@@ -5,7 +5,8 @@
     "pattern": "/data/images/dm_1*.jpg",
     "fps": [5, 15],
     "savePath": "/data/video",
-    "resolution": "1600:1200"
+    "resolution": "1600:1200",
+    "enabled_caption": false
   },
   {
     "name": "dm_2",
@@ -13,6 +14,7 @@
     "pattern": "/data/images/dm_2*.jpg",
     "fps": [5, 15],
     "savePath": "/data/video",
-    "resolution": "1600:1200"
+    "resolution": "1600:1200",
+    "enabled_caption": false
   }
 ]

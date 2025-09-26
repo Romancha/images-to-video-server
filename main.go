@@ -3,11 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/go-pkgz/lgr"
-	"github.com/jessevdk/go-flags"
-	"github.com/robfig/cron/v3"
-	ffmpeg "github.com/u2takey/ffmpeg-go"
 	"io"
 	"log"
 	"net/http"
@@ -16,6 +11,12 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-pkgz/lgr"
+	"github.com/jessevdk/go-flags"
+	"github.com/robfig/cron/v3"
+	ffmpeg "github.com/u2takey/ffmpeg-go"
 )
 
 var generateVideosMutex sync.Mutex
@@ -31,12 +32,13 @@ var opts struct {
 }
 
 type CaptureImage struct {
-	Name       string `json:"name"`
-	Title      string `json:"title"`
-	Pattern    string `json:"pattern"`
-	Fps        []int  `json:"fps"`
-	SavePath   string `json:"savePath"`
-	Resolution string `json:"resolution"`
+	Name           string `json:"name"`
+	Title          string `json:"title"`
+	Pattern        string `json:"pattern"`
+	Fps            []int  `json:"fps"`
+	SavePath       string `json:"savePath"`
+	Resolution     string `json:"resolution"`
+	EnabledCaption bool   `json:"enabledCaption"`
 }
 
 type CaptureImageList []CaptureImage
@@ -219,6 +221,10 @@ func generateVideosWithLock(captureImages CaptureImageList) {
 
 func generateVideos(captureImages CaptureImageList) {
 	for _, captureImage := range captureImages {
+		if !captureImage.EnabledCaption {
+			continue
+		}
+
 		log.Printf("[INFO] Capture image: %+v", captureImage)
 		generateVideo(captureImage)
 	}
